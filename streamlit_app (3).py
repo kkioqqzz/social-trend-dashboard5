@@ -1,115 +1,136 @@
-# 1️⃣ 라이브러리 import
 import pandas as pd
-from pytrends.request import TrendReq
-import instaloader
-from googleapiclient.discovery import build
 import streamlit as st
 import plotly.express as px
 import time
+import os
 
-# -------------------
-# 2️⃣ 키워드 및 API 설정
-hashtags = ["OOTD", "빈티지룩"]  # 분석할 키워드
+# 로컬/Cloud 구분
+IS_CLOUD = "IS_STREAMLIT_CLOUD" in os.environ
+
+# 키워드 및 API 설정
+hashtags = ["OOTD", "빈티지룩", "패션스타일", "데일리룩"]
 youtube_api_key = "여기에_API_KEY_입력"
 
+st.title("Social Trend Dashboard (로컬+Cloud 겸용)")
+
 # -------------------
-# 3️⃣ 인스타그램 데이터 수집
-st.sidebar.header("데이터 수집 상태")
-st.sidebar.write("Instagram 수집 중...")
-L = instaloader.Instaloader()
+# 1️⃣ Instagram 데이터 수집
 instagram_data = []
 
-for tag in hashtags:
+if not IS_CLOUD:
     try:
-        hashtag = instaloader.Hashtag.from_name(L.context, tag)
-        instagram_data.append({
-            "platform": "Instagram",
-            "hashtag": "#"+tag,
-            "mentions": hashtag.mediacount
-        })
-        time.sleep(1)
+        import instaloader
+        L = instaloader.Instaloader()
+        for tag in hashtags:
+            try:
+                hashtag = instaloader.Hashtag.from_name(L.context, tag)
+                instagram_data.append({
+                    "platform": "Instagram",
+                    "hashtag": "#"+tag,
+                    "mentions": hashtag.mediacount
+                })
+                time.sleep(1)
+            except Exception as e:
+                print(tag, e)
     except Exception as e:
-        print(tag, e)
+        print("Instaloader error:", e)
+
+# Cloud 또는 실패 시 샘플 데이터
+if not instagram_data:
+    instagram_data = [{"platform": "Instagram", "hashtag": f"#{tag}", "mentions": (i+1)*100} 
+                      for i, tag in enumerate(hashtags)]
 
 df_instagram = pd.DataFrame(instagram_data)
-st.sidebar.write("Instagram 완료 ✅")
 
 # -------------------
-# 4️⃣ 구글 트렌드 데이터 수집
-st.sidebar.write("GoogleTrends 수집 중...")
-pytrends = TrendReq(hl='ko', tz=540)
+# 2️⃣ Google Trends 데이터 수집
 google_data = []
 
-for tag in hashtags:
+if not IS_CLOUD:
     try:
-        pytrends.build_payload([tag], cat=0, timeframe='now 7-d', geo='KR', gprop='')
-        trend_data = pytrends.interest_over_time()
-        mentions = int(trend_data[tag].iloc[-1]) if not trend_data.empty else 0
-        google_data.append({
-            "platform": "GoogleTrends",
-            "hashtag": "#"+tag,
-            "mentions": mentions
-        })
-        time.sleep(1)
+        from pytrends.request import TrendReq
+        pytrends = TrendReq(hl='ko', tz=540)
+        for tag in hashtags:
+            try:
+                pytrends.build_payload([tag], cat=0, timeframe='now 7-d', geo='KR', gprop='')
+                trend_data = pytrends.interest_over_time()
+                mentions = int(trend_data[tag].iloc[-1]) if not trend_data.empty else 0
+                google_data.append({
+                    "platform": "GoogleTrends",
+                    "hashtag": "#"+tag,
+                    "mentions": mentions
+                })
+                time.sleep(1)
+            except Exception as e:
+                print(f"GoogleTrends {tag} error:", e)
+                google_data.append({
+                    "platform": "GoogleTrends",
+                    "hashtag": "#"+tag,
+                    "mentions": 0
+                })
     except Exception as e:
-        print(f"GoogleTrends {tag} error:", e)
-        google_data.append({
-            "platform": "GoogleTrends",
-            "hashtag": "#"+tag,
-            "mentions": 0
-        })
+        print("Pytrends error:", e)
+
+# Cloud 또는 실패 시 샘플 데이터
+if not google_data:
+    google_data = [{"platform": "GoogleTrends", "hashtag": f"#{tag}", "mentions": (i+1)*80} 
+                   for i, tag in enumerate(hashtags)]
 
 df_google = pd.DataFrame(google_data)
-st.sidebar.write("GoogleTrends 완료 ✅")
 
 # -------------------
-# 5️⃣ 유튜브 데이터 수집
-st.sidebar.write("YouTube 수집 중...")
-youtube = build('youtube', 'v3', developerKey=youtube_api_key)
+# 3️⃣ YouTube 데이터 수집
 youtube_data = []
 
-for kw in hashtags:
+if not IS_CLOUD:
     try:
-        req = youtube.search().list(q=kw, part='snippet', type='video', maxResults=5)
-        res = req.execute()
-        for item in res['items']:
-            video_id = item['id']['videoId']
-            stats_req = youtube.videos().list(part='statistics', id=video_id)
-            stats_res = stats_req.execute()
-            stats = stats_res['items'][0]['statistics']
-            youtube_data.append({
-                "platform": "YouTube",
-                "hashtag": kw,
-                "mentions": int(stats.get('viewCount', 0))
-            })
-        time.sleep(1)
+        from googleapiclient.discovery import build
+        youtube = build('youtube', 'v3', developerKey=youtube_api_key)
+        for kw in hashtags:
+            try:
+                req = youtube.search().list(q=kw, part='snippet', type='video', maxResults=3)
+                res = req.execute()
+                for item in res['items']:
+                    video_id = item['id']['videoId']
+                    stats_req = youtube.videos().list(part='statistics', id=video_id)
+                    stats_res = stats_req.execute()
+                    stats = stats_res['items'][0]['statistics']
+                    youtube_data.append({
+                        "platform": "YouTube",
+                        "hashtag": kw,
+                        "mentions": int(stats.get('viewCount', 0))
+                    })
+                time.sleep(1)
+            except Exception as e:
+                print(f"YouTube {kw} error:", e)
     except Exception as e:
-        print(f"YouTube {kw} error:", e)
+        print("YouTube API error:", e)
+
+# Cloud 또는 실패 시 샘플 데이터
+if not youtube_data:
+    youtube_data = [{"platform": "YouTube", "hashtag": f"#{tag}", "mentions": (i+1)*50} 
+                    for i, tag in enumerate(hashtags)]
 
 df_youtube = pd.DataFrame(youtube_data)
-st.sidebar.write("YouTube 완료 ✅")
 
 # -------------------
-# 6️⃣ 데이터 통합
+# 4️⃣ 데이터 통합
 df = pd.concat([df_instagram, df_google, df_youtube], ignore_index=True)
 
 # -------------------
-# 7️⃣ Streamlit UI
-st.title("Social Trend Dashboard (통합 안전버전)")
-
-# 플랫폼 선택
+# 5️⃣ Streamlit UI
 platform = st.selectbox("Platform 선택", df['platform'].unique())
 df_platform = df[df['platform']==platform]
 
-# TOP N 키워드 표시
+# TOP N
 st.subheader(f"{platform} TOP 키워드")
 top_n = st.slider("몇 개 보여줄까요?", 1, len(df_platform), 3)
 top_keywords = df_platform.sort_values("mentions", ascending=False).head(top_n)
 st.dataframe(top_keywords)
 
-# 막대그래프 시각화
+# 막대그래프
 st.subheader("키워드 언급량 비교")
-fig = px.bar(top_keywords, x="hashtag", y="mentions", text="mentions")
+fig = px.bar(top_keywords, x="hashtag", y="mentions", text="mentions", color="hashtag")
 st.plotly_chart(fig)
 
 # 키워드 검색
