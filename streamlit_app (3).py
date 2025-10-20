@@ -113,6 +113,6 @@ search = st.text_input("검색어 입력 (# 없이도 가능)").lower()
 if search:
     search_df = df_platform[df_platform['hashtag'].str.lower().str.contains(search)]
     if not search_df.empty:
-        st.dataframe(search_df
+        st.dataframe(search_df)
     else:
         st.write("검색 결과 없음")
