@@ -7,12 +7,15 @@ import streamlit as st
 import plotly.express as px
 import time
 
-# 2️⃣ 키워드 & API 설정
-hashtags = ["OOTD", "빈티지룩"]  # 원하는 키워드 리스트
+# -------------------
+# 2️⃣ 키워드 및 API 설정
+hashtags = ["OOTD", "빈티지룩"]  # 분석할 키워드
 youtube_api_key = "여기에_API_KEY_입력"
 
 # -------------------
 # 3️⃣ 인스타그램 데이터 수집
+st.sidebar.header("데이터 수집 상태")
+st.sidebar.write("Instagram 수집 중...")
 L = instaloader.Instaloader()
 instagram_data = []
 
@@ -29,9 +32,11 @@ for tag in hashtags:
         print(tag, e)
 
 df_instagram = pd.DataFrame(instagram_data)
+st.sidebar.write("Instagram 완료 ✅")
 
 # -------------------
 # 4️⃣ 구글 트렌드 데이터 수집
+st.sidebar.write("GoogleTrends 수집 중...")
 pytrends = TrendReq(hl='ko', tz=540)
 google_data = []
 
@@ -55,9 +60,11 @@ for tag in hashtags:
         })
 
 df_google = pd.DataFrame(google_data)
+st.sidebar.write("GoogleTrends 완료 ✅")
 
 # -------------------
 # 5️⃣ 유튜브 데이터 수집
+st.sidebar.write("YouTube 수집 중...")
 youtube = build('youtube', 'v3', developerKey=youtube_api_key)
 youtube_data = []
 
@@ -80,26 +87,27 @@ for kw in hashtags:
         print(f"YouTube {kw} error:", e)
 
 df_youtube = pd.DataFrame(youtube_data)
+st.sidebar.write("YouTube 완료 ✅")
 
 # -------------------
-# 6️⃣ 데이터 통합 (CSV 없이 바로 사용)
+# 6️⃣ 데이터 통합
 df = pd.concat([df_instagram, df_google, df_youtube], ignore_index=True)
 
 # -------------------
 # 7️⃣ Streamlit UI
-st.title("Social Trend Dashboard (CSV 없이 안전버전)")
+st.title("Social Trend Dashboard (통합 안전버전)")
 
 # 플랫폼 선택
 platform = st.selectbox("Platform 선택", df['platform'].unique())
 df_platform = df[df['platform']==platform]
 
-# TOP N 키워드
+# TOP N 키워드 표시
 st.subheader(f"{platform} TOP 키워드")
 top_n = st.slider("몇 개 보여줄까요?", 1, len(df_platform), 3)
 top_keywords = df_platform.sort_values("mentions", ascending=False).head(top_n)
 st.dataframe(top_keywords)
 
-# 막대그래프
+# 막대그래프 시각화
 st.subheader("키워드 언급량 비교")
 fig = px.bar(top_keywords, x="hashtag", y="mentions", text="mentions")
 st.plotly_chart(fig)
