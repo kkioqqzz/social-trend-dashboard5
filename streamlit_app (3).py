@@ -21,76 +21,83 @@ naver_client_id = st.text_input("Naver Client ID")
 naver_client_secret = st.text_input("Naver Client Secret", type="password")
 
 # -------------------
-# 2️⃣ Instagram 데이터 수집
-st.sidebar.header("Instagram 데이터 수집 중...")
+# 2️⃣ Instagram 로그인 및 데이터 수집
+st.sidebar.header("Instagram 상태")
 instagram_data = []
 
-try:
-    L = instaloader.Instaloader()
-    if insta_username and insta_password:
+if insta_username and insta_password:
+    try:
+        L = instaloader.Instaloader()
         L.login(insta_username, insta_password)
-    for tag in hashtags:
-        try:
-            hashtag = instaloader.Hashtag.from_name(L.context, tag)
-            instagram_data.append({
-                "platform": "Instagram",
-                "hashtag": "#"+tag,
-                "mentions": hashtag.mediacount
-            })
-            time.sleep(1)
-        except:
-            instagram_data.append({"platform":"Instagram","hashtag":"#"+tag,"mentions":0})
-except:
+        st.sidebar.success("Instagram 로그인 성공 ✅ 데이터 수집 시작...")
+        for tag in hashtags:
+            try:
+                hashtag = instaloader.Hashtag.from_name(L.context, tag)
+                instagram_data.append({
+                    "platform": "Instagram",
+                    "hashtag": "#"+tag,
+                    "mentions": hashtag.mediacount
+                })
+                time.sleep(1)
+            except:
+                instagram_data.append({"platform":"Instagram","hashtag":"#"+tag,"mentions":0})
+        st.sidebar.info("Instagram 데이터 수집 완료 ✅")
+    except Exception as e:
+        st.sidebar.error(f"Instagram 로그인 실패 ❌\n사유: {e}")
+        instagram_data = [{"platform":"Instagram","hashtag":"#"+tag,"mentions":0} for tag in hashtags]
+else:
     instagram_data = [{"platform":"Instagram","hashtag":"#"+tag,"mentions":0} for tag in hashtags]
 
 df_instagram = pd.DataFrame(instagram_data, columns=["platform","hashtag","mentions"])
-st.sidebar.write("Instagram 완료 ✅")
 
 # -------------------
 # 3️⃣ Google Trends 데이터 수집
-st.sidebar.write("GoogleTrends 데이터 수집 중...")
+st.sidebar.header("Google Trends 상태")
 google_data = []
-
-pytrends = TrendReq(hl='ko', tz=540)
-for tag in hashtags:
-    try:
-        pytrends.build_payload([tag], timeframe='now 7-d', geo='KR')
-        trend_data = pytrends.interest_over_time()
-        mentions = int(trend_data[tag].iloc[-1]) if not trend_data.empty else 0
-        google_data.append({"platform":"GoogleTrends","hashtag":"#"+tag,"mentions":mentions})
-        time.sleep(1)
-    except:
-        google_data.append({"platform":"GoogleTrends","hashtag":"#"+tag,"mentions":0})
+try:
+    pytrends = TrendReq(hl='ko', tz=540)
+    for tag in hashtags:
+        try:
+            pytrends.build_payload([tag], timeframe='now 7-d', geo='KR')
+            trend_data = pytrends.interest_over_time()
+            mentions = int(trend_data[tag].iloc[-1]) if not trend_data.empty else 0
+            google_data.append({"platform":"GoogleTrends","hashtag":"#"+tag,"mentions":mentions})
+            time.sleep(1)
+        except Exception as e:
+            google_data.append({"platform":"GoogleTrends","hashtag":"#"+tag,"mentions":0})
+    st.sidebar.success("Google Trends 데이터 수집 완료 ✅")
+except Exception as e:
+    st.sidebar.error(f"Google Trends 오류 ❌\n사유: {e}")
+    google_data = [{"platform":"GoogleTrends","hashtag":"#"+tag,"mentions":0} for tag in hashtags]
 
 df_google = pd.DataFrame(google_data, columns=["platform","hashtag","mentions"])
-st.sidebar.write("GoogleTrends 완료 ✅")
 
 # -------------------
 # 4️⃣ Naver 데이터 수집
-st.sidebar.write("Naver 데이터 수집 중...")
+st.sidebar.header("Naver 상태")
 naver_data = []
 
 if naver_client_id and naver_client_secret:
-    for kw in hashtags:
-        try:
+    try:
+        for kw in hashtags:
             url = "https://openapi.naver.com/v1/search/blog.json"
-            headers = {
-                "X-Naver-Client-Id": naver_client_id,
-                "X-Naver-Client-Secret": naver_client_secret
-            }
+            headers = {"X-Naver-Client-Id":naver_client_id,"X-Naver-Client-Secret":naver_client_secret}
             params = {"query":kw,"display":1}
-            res = requests.get(url, headers=headers, params=params).json()
-            total_count = int(res.get("total",0))
-            naver_data.append({"platform":"Naver","hashtag":kw,"mentions":total_count})
+            res = requests.get(url, headers=headers, params=params)
+            if res.status_code == 200:
+                total_count = int(res.json().get("total",0))
+                naver_data.append({"platform":"Naver","hashtag":kw,"mentions":total_count})
+            else:
+                naver_data.append({"platform":"Naver","hashtag":kw,"mentions":0})
             time.sleep(1)
-        except:
-            naver_data.append({"platform":"Naver","hashtag":kw,"mentions":0})
-
-if not naver_data:
+        st.sidebar.success("Naver 데이터 수집 완료 ✅")
+    except Exception as e:
+        st.sidebar.error(f"Naver API 호출 실패 ❌\n사유: {e}")
+        naver_data = [{"platform":"Naver","hashtag":f"#{tag}","mentions":0} for tag in hashtags]
+else:
     naver_data = [{"platform":"Naver","hashtag":f"#{tag}","mentions":0} for tag in hashtags]
 
 df_naver = pd.DataFrame(naver_data, columns=["platform","hashtag","mentions"])
-st.sidebar.write("Naver 완료 ✅")
 
 # -------------------
 # 5️⃣ 데이터 통합
