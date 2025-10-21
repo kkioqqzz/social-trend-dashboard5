@@ -18,6 +18,12 @@ if "insta_client" not in st.session_state:
     st.session_state.insta_client = None
 if "insta_login_success" not in st.session_state:
     st.session_state.insta_login_success = False
+if "insta_id" not in st.session_state:
+    st.session_state.insta_id = ""
+if "insta_pw" not in st.session_state:
+    st.session_state.insta_pw = ""
+if "two_factor_code" not in st.session_state:
+    st.session_state.two_factor_code = ""
 
 # -----------------------------
 # 로그 함수
@@ -30,7 +36,6 @@ def log(message):
 # 플랫폼 선택
 # -----------------------------
 platform = st.selectbox("플랫폼 선택", ["Google Trends", "Naver 데이터랩", "Instagram"])
-
 keyword_input = st.text_input("검색 키워드 (선택)")
 
 # -----------------------------
@@ -102,7 +107,7 @@ def insta_login(insta_id, insta_pw, two_factor_code=None):
         return None
 
 # -----------------------------
-# 실행 버튼
+# 데이터 수집 실행
 # -----------------------------
 if st.button("데이터 수집 실행"):
     df = pd.DataFrame()
@@ -112,21 +117,26 @@ if st.button("데이터 수집 실행"):
             df = get_google_trends([keyword_input])
         else:
             st.info("⚠️ 키워드를 입력해주세요")
+            
     elif platform == "Naver 데이터랩":
         df = get_naver_datalab_trends()
         if keyword_input:
             if not df.empty:
                 df = df[df['검색어'].astype(str).str.contains(keyword_input)]
+                
     elif platform == "Instagram":
-        insta_id = st.text_input("Instagram ID")
-        insta_pw = st.text_input("Instagram PW", type="password")
+        st.session_state.insta_id = st.text_input("Instagram ID", value=st.session_state.insta_id)
+        st.session_state.insta_pw = st.text_input("Instagram PW", type="password", value=st.session_state.insta_pw)
+        
         if st.session_state.insta_2fa_required:
-            two_factor_code = st.text_input("2단계 인증 코드 입력", max_chars=6)
-            if st.button("2FA 인증 제출") and two_factor_code:
-                insta_login(insta_id, insta_pw, two_factor_code)
+            st.session_state.two_factor_code = st.text_input(
+                "2단계 인증 코드 입력", max_chars=6, value=st.session_state.two_factor_code
+            )
+            if st.button("2FA 인증 제출") and st.session_state.two_factor_code:
+                insta_login(st.session_state.insta_id, st.session_state.insta_pw, st.session_state.two_factor_code)
         else:
-            if st.button("Instagram 로그인 시도") and insta_id and insta_pw:
-                insta_login(insta_id, insta_pw)
+            if st.button("Instagram 로그인 시도") and st.session_state.insta_id and st.session_state.insta_pw:
+                insta_login(st.session_state.insta_id, st.session_state.insta_pw)
     
     if not df.empty:
         st.dataframe(df)
