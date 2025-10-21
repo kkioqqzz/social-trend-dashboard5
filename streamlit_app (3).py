@@ -13,43 +13,35 @@ st.set_page_config(page_title="소상공인 트렌드 분석", layout="wide")
 st.title("📊 소상공인 트렌드 분석 대시보드")
 
 # -------------------------
-# 상태 및 로그
-status_col, info_col = st.columns([2, 5])
-with status_col:
-    st.subheader("상태")
-    n_status = st.empty()
-    i_status = st.empty()
-with info_col:
-    st.subheader("로그")
-    if "log_text" not in st.session_state:
-        st.session_state.log_text = ""
-    log_area = st.text_area(
-        "실행 로그 (최근 항목 최상단)",
-        value=st.session_state.log_text,
-        height=240,
-        key="log_text_area",
-        disabled=True
-    )
+# 세션 상태 초기화
+if "log_text" not in st.session_state:
+    st.session_state.log_text = ""
+if "log_display" not in st.session_state:
+    st.session_state.log_display = None
 
 # -------------------------
-# 로그 함수
+# 로그 함수 (중복 오류 방지)
 def log(msg):
     timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
     st.session_state.log_text = f"{timestamp} — {msg}\n" + st.session_state.log_text
-    log_area.text_area(
-        "실행 로그 (최근 항목 최상단)",
-        value=st.session_state.log_text,
-        height=240,
-        key="log_text_area",
-        disabled=True
-    )
+    # 단 한 번만 text_area 생성, 이후 갱신
+    if st.session_state.log_display is None:
+        st.session_state.log_display = st.text_area(
+            "실행 로그 (최근 항목 최상단)",
+            value=st.session_state.log_text,
+            height=240,
+            key="log_text_area",
+            disabled=True
+        )
+    else:
+        st.session_state.log_display.text(st.session_state.log_text)
 
 # -------------------------
 # 플랫폼 선택
 platform = st.selectbox("플랫폼 선택", ["네이버 데이터랩", "Instagram", "Google Trends"])
 
 # -------------------------
-# 키워드 입력
+# 키워드 검색 입력
 keyword_input = st.text_input("키워드 검색 (예: 아이유, 블랙핑크)")
 
 # -------------------------
@@ -100,12 +92,6 @@ def get_google_trends(keyword_list):
         return pd.DataFrame()
 
 # -------------------------
-# Instagram 로그인 입력 (선택적)
-if platform == "Instagram":
-    insta_id = st.text_input("Instagram ID")
-    insta_pw = st.text_input("Instagram PW", type="password")
-
-# -------------------------
 # 데이터 수집 버튼
 if st.button("데이터 수집 실행"):
     if platform == "네이버 데이터랩":
@@ -114,6 +100,8 @@ if st.button("데이터 수집 실행"):
             df = df[df['검색어'].str.contains(keyword_input)]
         st.dataframe(df)
     elif platform == "Instagram":
+        insta_id = st.text_input("Instagram ID")
+        insta_pw = st.text_input("Instagram PW", type="password")
         if insta_id and insta_pw and keyword_input:
             df = get_instagram_hashtags(insta_id, insta_pw, keyword_input)
             st.dataframe(df)
