@@ -8,7 +8,7 @@ from instagrapi import Client
 from pytrends.request import TrendReq
 
 # -------------------------
-# 페이지 기본 설정
+# 페이지 설정
 st.set_page_config(page_title="소상공인 트렌드 분석", layout="wide")
 st.title("📊 소상공인 트렌드 분석 대시보드")
 
@@ -22,7 +22,6 @@ if "log_text" not in st.session_state:
 def log(msg):
     timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
     st.session_state.log_text = f"{timestamp} — {msg}\n" + st.session_state.log_text
-    # 항상 같은 key 사용하여 재렌더링
     st.text_area(
         "실행 로그 (최근 항목 최상단)",
         value=st.session_state.log_text,
@@ -53,6 +52,9 @@ def get_naver_datalab_trends():
         res = requests.get(url, headers=headers)
         soup = BeautifulSoup(res.text, "html.parser")
         keywords = [item.get_text(strip=True) for item in soup.select("div.rank_scroll li span.item_title")]
+        if not keywords:
+            log("⚠️ 네이버 데이터랩: 인기검색어 수집 결과 없음")
+            return pd.DataFrame()
         ranks = list(range(1, len(keywords)+1))
         df = pd.DataFrame({"순위": ranks, "검색어": keywords})
         log("✅ 네이버 데이터랩 인기검색어 수집 완료")
@@ -76,19 +78,25 @@ def get_instagram_hashtags(username, password, keyword):
         return pd.DataFrame()
 
 # -------------------------
-# Google Trends 수집
-def get_google_trends(keyword_list):
+# Google Trends 수집 (재시도 로직)
+def get_google_trends(keyword_list, retries=3):
     try:
         pytrends = TrendReq(hl='ko', tz=540)
-        pytrends.build_payload(keyword_list, timeframe='now 7-d', geo='KR')
-        df = pytrends.interest_over_time().reset_index()
-        if df.empty:
-            log("⚠️ Google Trends: 빈 데이터 발생")
-        else:
-            log("✅ Google Trends 수집 완료")
-        return df
+        for attempt in range(retries):
+            try:
+                pytrends.build_payload(keyword_list, timeframe='now 7-d', geo='KR')
+                df = pytrends.interest_over_time().reset_index()
+                if df.empty:
+                    log("⚠️ Google Trends: 빈 데이터 발생")
+                else:
+                    log("✅ Google Trends 수집 완료")
+                return df
+            except Exception as e_inner:
+                log(f"⚠️ Google Trends 요청 실패, 재시도 {attempt+1}/{retries}: {e_inner}")
+                time.sleep(2)  # 잠시 대기 후 재시도
+        return pd.DataFrame()
     except Exception as e:
-        log(f"❌ Google Trends 수집 오류: {e}")
+        log(f"❌ Google Trends 최종 오류: {e}")
         return pd.DataFrame()
 
 # -------------------------
@@ -96,8 +104,8 @@ def get_google_trends(keyword_list):
 if st.button("데이터 수집 실행"):
     if platform == "네이버 데이터랩":
         df = get_naver_datalab_trends()
-        if keyword_input:
-            df = df[df['검색어'].str.contains(keyword_input)]
+        if not df.empty and keyword_input:
+            df = df[df['검색어'].astype(str).str.contains(keyword_input)]
         st.dataframe(df)
 
     elif platform == "Instagram":
