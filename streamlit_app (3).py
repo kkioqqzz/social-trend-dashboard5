@@ -12,18 +12,18 @@ from instagrapi.exceptions import TwoFactorRequired
 # -----------------------------
 if "log_text" not in st.session_state:
     st.session_state.log_text = ""
-if "insta_2fa_required" not in st.session_state:
-    st.session_state.insta_2fa_required = False
-if "insta_client" not in st.session_state:
-    st.session_state.insta_client = None
-if "insta_login_success" not in st.session_state:
-    st.session_state.insta_login_success = False
 if "insta_id" not in st.session_state:
     st.session_state.insta_id = ""
 if "insta_pw" not in st.session_state:
     st.session_state.insta_pw = ""
 if "two_factor_code" not in st.session_state:
     st.session_state.two_factor_code = ""
+if "insta_2fa_required" not in st.session_state:
+    st.session_state.insta_2fa_required = False
+if "insta_login_success" not in st.session_state:
+    st.session_state.insta_login_success = False
+if "insta_client" not in st.session_state:
+    st.session_state.insta_client = None
 
 # -----------------------------
 # 로그 함수
@@ -55,7 +55,6 @@ def get_google_trends(keywords):
         return trend_data
     except Exception as e:
         log(f"❌ Google Trends 수집 오류: {e}")
-        time.sleep(2)
         return pd.DataFrame()
 
 # -----------------------------
@@ -94,6 +93,7 @@ def insta_login(insta_id, insta_pw, two_factor_code=None):
             cl.login(insta_id, insta_pw)
             st.session_state.insta_client = cl
             st.session_state.insta_login_success = True
+            st.session_state.insta_2fa_required = False
             log("✅ Instagram 로그인 성공")
             return cl
     except TwoFactorRequired:
@@ -105,6 +105,25 @@ def insta_login(insta_id, insta_pw, two_factor_code=None):
         st.session_state.insta_login_success = False
         log(f"❌ Instagram 로그인 실패: {e}")
         return None
+
+# -----------------------------
+# Instagram 입력창 및 2FA 처리
+# -----------------------------
+if platform == "Instagram":
+    st.session_state.insta_id = st.text_input("Instagram ID", value=st.session_state.insta_id)
+    st.session_state.insta_pw = st.text_input("Instagram PW", type="password", value=st.session_state.insta_pw)
+    
+    # 로그인 버튼 항상 렌더링
+    if st.button("Instagram 로그인 시도"):
+        insta_login(st.session_state.insta_id, st.session_state.insta_pw)
+    
+    # 2FA 입력창
+    if st.session_state.insta_2fa_required:
+        st.session_state.two_factor_code = st.text_input(
+            "2단계 인증 코드 입력", max_chars=6, value=st.session_state.two_factor_code
+        )
+        if st.button("2FA 인증 제출") and st.session_state.two_factor_code:
+            insta_login(st.session_state.insta_id, st.session_state.insta_pw, st.session_state.two_factor_code)
 
 # -----------------------------
 # 데이터 수집 실행
@@ -123,22 +142,9 @@ if st.button("데이터 수집 실행"):
         if keyword_input:
             if not df.empty:
                 df = df[df['검색어'].astype(str).str.contains(keyword_input)]
-                
-    elif platform == "Instagram":
-        st.session_state.insta_id = st.text_input("Instagram ID", value=st.session_state.insta_id)
-        st.session_state.insta_pw = st.text_input("Instagram PW", type="password", value=st.session_state.insta_pw)
-        
-        if st.session_state.insta_2fa_required:
-            st.session_state.two_factor_code = st.text_input(
-                "2단계 인증 코드 입력", max_chars=6, value=st.session_state.two_factor_code
-            )
-            if st.button("2FA 인증 제출") and st.session_state.two_factor_code:
-                insta_login(st.session_state.insta_id, st.session_state.insta_pw, st.session_state.two_factor_code)
-        else:
-            if st.button("Instagram 로그인 시도") and st.session_state.insta_id and st.session_state.insta_pw:
-                insta_login(st.session_state.insta_id, st.session_state.insta_pw)
     
-    if not df.empty:
+    # Instagram은 로그인 시 직접 데이터를 수집하도록 별도 기능 필요
+    if platform != "Instagram" and not df.empty:
         st.dataframe(df)
-    else:
+    elif platform != "Instagram" and df.empty:
         st.info("데이터가 없습니다.")
