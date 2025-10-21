@@ -1,7 +1,7 @@
-streamlit
-pandas
-requests
-beautifulsoup4
-instagrapi
-pytrends
-plotly
+streamlit==1.26.0
+pandas==2.1.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+pytrends==4.9.0
+instagrapi==1.19.2
+plotly==5.17.0
