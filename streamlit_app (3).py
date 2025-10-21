@@ -16,25 +16,20 @@ st.title("📊 소상공인 트렌드 분석 대시보드")
 # 세션 상태 초기화
 if "log_text" not in st.session_state:
     st.session_state.log_text = ""
-if "log_display" not in st.session_state:
-    st.session_state.log_display = None
 
 # -------------------------
-# 로그 함수 (중복 오류 방지)
+# 로그 함수
 def log(msg):
     timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
     st.session_state.log_text = f"{timestamp} — {msg}\n" + st.session_state.log_text
-    # 단 한 번만 text_area 생성, 이후 갱신
-    if st.session_state.log_display is None:
-        st.session_state.log_display = st.text_area(
-            "실행 로그 (최근 항목 최상단)",
-            value=st.session_state.log_text,
-            height=240,
-            key="log_text_area",
-            disabled=True
-        )
-    else:
-        st.session_state.log_display.text(st.session_state.log_text)
+    # 항상 같은 key 사용하여 재렌더링
+    st.text_area(
+        "실행 로그 (최근 항목 최상단)",
+        value=st.session_state.log_text,
+        height=240,
+        key="log_text_area",
+        disabled=True
+    )
 
 # -------------------------
 # 플랫폼 선택
@@ -43,6 +38,11 @@ platform = st.selectbox("플랫폼 선택", ["네이버 데이터랩", "Instagra
 # -------------------------
 # 키워드 검색 입력
 keyword_input = st.text_input("키워드 검색 (예: 아이유, 블랙핑크)")
+
+# -------------------------
+# Instagram ID/PW 입력 (항상 렌더링)
+insta_id = st.text_input("Instagram ID")
+insta_pw = st.text_input("Instagram PW", type="password")
 
 # -------------------------
 # 네이버 데이터랩 수집
@@ -99,14 +99,14 @@ if st.button("데이터 수집 실행"):
         if keyword_input:
             df = df[df['검색어'].str.contains(keyword_input)]
         st.dataframe(df)
+
     elif platform == "Instagram":
-        insta_id = st.text_input("Instagram ID")
-        insta_pw = st.text_input("Instagram PW", type="password")
         if insta_id and insta_pw and keyword_input:
             df = get_instagram_hashtags(insta_id, insta_pw, keyword_input)
             st.dataframe(df)
         else:
             st.info("ID, PW, 키워드를 모두 입력해주세요.")
+
     elif platform == "Google Trends":
         if keyword_input:
             df = get_google_trends([keyword_input])
