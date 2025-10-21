@@ -1,6 +1,6 @@
 streamlit
 pandas
+requests
+beautifulsoup4
+instagrapi
 plotly
-pytrends
-instaloader
-google-api-python-client
