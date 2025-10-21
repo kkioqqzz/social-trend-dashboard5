@@ -14,21 +14,24 @@ st.title("📊 소상공인 트렌드 분석 대시보드")
 
 # -------------------------
 # 세션 상태 초기화
-if "log_text" not in st.session_state:
-    st.session_state.log_text = ""
+if "log_display" not in st.session_state:
+    st.session_state.log_display = ""
+
+# -------------------------
+# 로그 화면 한 번만 렌더링
+st.text_area(
+    "실행 로그 (최근 항목 최상단)",
+    value=st.session_state.log_display,
+    height=240,
+    key="log_area",
+    disabled=True
+)
 
 # -------------------------
 # 로그 함수
 def log(msg):
     timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
-    st.session_state.log_text = f"{timestamp} — {msg}\n" + st.session_state.log_text
-    st.text_area(
-        "실행 로그 (최근 항목 최상단)",
-        value=st.session_state.log_text,
-        height=240,
-        key="log_text_area",
-        disabled=True
-    )
+    st.session_state.log_display = f"{timestamp} — {msg}\n" + st.session_state.log_display
 
 # -------------------------
 # 플랫폼 선택
@@ -39,7 +42,7 @@ platform = st.selectbox("플랫폼 선택", ["네이버 데이터랩", "Instagra
 keyword_input = st.text_input("키워드 검색 (예: 아이유, 블랙핑크)")
 
 # -------------------------
-# Instagram ID/PW 입력 (항상 렌더링)
+# Instagram ID/PW 입력
 insta_id = st.text_input("Instagram ID")
 insta_pw = st.text_input("Instagram PW", type="password")
 
@@ -49,7 +52,7 @@ def get_naver_datalab_trends():
     try:
         url = "https://datalab.naver.com/keyword/realtimeList.naver?entertainment=0&sports=0"
         headers = {"User-Agent": "Mozilla/5.0"}
-        res = requests.get(url, headers=headers)
+        res = requests.get(url, headers=headers, timeout=5)
         soup = BeautifulSoup(res.text, "html.parser")
         keywords = [item.get_text(strip=True) for item in soup.select("div.rank_scroll li span.item_title")]
         if not keywords:
@@ -70,6 +73,9 @@ def get_instagram_hashtags(username, password, keyword):
         cl = Client()
         cl.login(username, password)
         results = cl.hashtag_search(keyword)
+        if not results:
+            log("⚠️ Instagram: 검색 결과 없음")
+            return pd.DataFrame()
         df = pd.DataFrame([{"해시태그": r.name, "미디어 수": r.media_count} for r in results])
         log("✅ Instagram 해시태그 수집 완료")
         return df
@@ -78,7 +84,7 @@ def get_instagram_hashtags(username, password, keyword):
         return pd.DataFrame()
 
 # -------------------------
-# Google Trends 수집 (재시도 로직)
+# Google Trends 수집
 def get_google_trends(keyword_list, retries=3):
     try:
         pytrends = TrendReq(hl='ko', tz=540)
@@ -93,7 +99,7 @@ def get_google_trends(keyword_list, retries=3):
                 return df
             except Exception as e_inner:
                 log(f"⚠️ Google Trends 요청 실패, 재시도 {attempt+1}/{retries}: {e_inner}")
-                time.sleep(2)  # 잠시 대기 후 재시도
+                time.sleep(2)
         return pd.DataFrame()
     except Exception as e:
         log(f"❌ Google Trends 최종 오류: {e}")
