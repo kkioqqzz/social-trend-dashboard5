@@ -78,7 +78,7 @@ def get_naver_datalab_trends():
         return pd.DataFrame()
 
 # -----------------------------
-# Instagram 로그인 + 2FA / 이메일 인증
+# Instagram 로그인 + 2FA/이메일 인증
 # -----------------------------
 def insta_login(insta_id, insta_pw, code=None):
     cl = Client()
@@ -86,39 +86,33 @@ def insta_login(insta_id, insta_pw, code=None):
         if code:
             # 2FA 혹은 이메일 인증 코드 처리
             try:
-                cl.two_factor_login(code)  # 2FA
+                cl.two_factor_login(code)
             except:
-                pass
-            try:
-                cl.challenge_resolve(code) # 이메일/체크포인트
-            except:
-                pass
+                cl.challenge_resolve(code)
             st.session_state.insta_login_success = True
             st.session_state.insta_2fa_required = False
             log("✅ Instagram 인증 완료")
             st.session_state.insta_client = cl
-            return cl
+            st.experimental_rerun()
         else:
             cl.login(insta_id, insta_pw)
             st.session_state.insta_client = cl
             st.session_state.insta_login_success = True
             st.session_state.insta_2fa_required = False
             log("✅ Instagram 로그인 성공")
-            return cl
     except TwoFactorRequired:
         st.session_state.insta_2fa_required = True
-        st.warning("⚠️ 2단계 인증 필요: Instagram 앱에서 6자리 코드를 확인하고 입력해주세요.")
+        st.warning("⚠️ 2단계 인증 필요: 앱에서 6자리 코드를 확인하고 입력해주세요.")
         st.session_state.insta_client = cl
-        return cl
+        st.experimental_rerun()
     except ChallengeRequired:
         st.session_state.insta_2fa_required = True
-        st.warning("⚠️ 이메일 인증 필요: Instagram에서 받은 6자리 코드를 입력해주세요.")
+        st.warning("⚠️ 이메일 인증 필요: 메일에서 받은 6자리 코드를 입력해주세요.")
         st.session_state.insta_client = cl
-        return cl
+        st.experimental_rerun()
     except Exception as e:
         st.session_state.insta_login_success = False
         log(f"❌ Instagram 로그인 실패: {e}")
-        return None
 
 # -----------------------------
 # Instagram 입력창 및 인증 처리
@@ -158,4 +152,3 @@ if st.button("데이터 수집 실행"):
         st.dataframe(df)
     elif platform != "Instagram" and df.empty:
         st.info("데이터가 없습니다.")
-
