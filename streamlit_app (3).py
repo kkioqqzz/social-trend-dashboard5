@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 import time
 from pytrends.request import TrendReq
 from instagrapi import Client
-from instagrapi.exceptions import TwoFactorRequired
+from instagrapi.exceptions import TwoFactorRequired, ChallengeRequired
 
 # -----------------------------
 # 세션 상태 초기화
@@ -78,16 +78,25 @@ def get_naver_datalab_trends():
         return pd.DataFrame()
 
 # -----------------------------
-# Instagram 로그인 + 2FA
+# Instagram 로그인 + 2FA / 이메일 인증
 # -----------------------------
-def insta_login(insta_id, insta_pw, two_factor_code=None):
+def insta_login(insta_id, insta_pw, code=None):
     cl = Client()
     try:
-        if two_factor_code:
-            cl.two_factor_login(two_factor_code)
+        if code:
+            # 2FA 혹은 이메일 인증 코드 처리
+            try:
+                cl.two_factor_login(code)  # 2FA
+            except:
+                pass
+            try:
+                cl.challenge_resolve(code) # 이메일/체크포인트
+            except:
+                pass
             st.session_state.insta_login_success = True
             st.session_state.insta_2fa_required = False
-            log("✅ Instagram 2단계 인증 성공")
+            log("✅ Instagram 인증 완료")
+            st.session_state.insta_client = cl
             return cl
         else:
             cl.login(insta_id, insta_pw)
@@ -97,9 +106,14 @@ def insta_login(insta_id, insta_pw, two_factor_code=None):
             log("✅ Instagram 로그인 성공")
             return cl
     except TwoFactorRequired:
-        st.session_state.insta_client = cl
         st.session_state.insta_2fa_required = True
         st.warning("⚠️ 2단계 인증 필요: Instagram 앱에서 6자리 코드를 확인하고 입력해주세요.")
+        st.session_state.insta_client = cl
+        return cl
+    except ChallengeRequired:
+        st.session_state.insta_2fa_required = True
+        st.warning("⚠️ 이메일 인증 필요: Instagram에서 받은 6자리 코드를 입력해주세요.")
+        st.session_state.insta_client = cl
         return cl
     except Exception as e:
         st.session_state.insta_login_success = False
@@ -107,22 +121,20 @@ def insta_login(insta_id, insta_pw, two_factor_code=None):
         return None
 
 # -----------------------------
-# Instagram 입력창 및 2FA 처리
+# Instagram 입력창 및 인증 처리
 # -----------------------------
 if platform == "Instagram":
     st.session_state.insta_id = st.text_input("Instagram ID", value=st.session_state.insta_id)
     st.session_state.insta_pw = st.text_input("Instagram PW", type="password", value=st.session_state.insta_pw)
     
-    # 로그인 버튼 항상 렌더링
     if st.button("Instagram 로그인 시도"):
         insta_login(st.session_state.insta_id, st.session_state.insta_pw)
     
-    # 2FA 입력창
     if st.session_state.insta_2fa_required:
         st.session_state.two_factor_code = st.text_input(
-            "2단계 인증 코드 입력", max_chars=6, value=st.session_state.two_factor_code
+            "인증 코드 입력 (2FA 또는 이메일)", max_chars=6, value=st.session_state.two_factor_code
         )
-        if st.button("2FA 인증 제출") and st.session_state.two_factor_code:
+        if st.button("인증 코드 제출") and st.session_state.two_factor_code:
             insta_login(st.session_state.insta_id, st.session_state.insta_pw, st.session_state.two_factor_code)
 
 # -----------------------------
@@ -139,12 +151,11 @@ if st.button("데이터 수집 실행"):
             
     elif platform == "Naver 데이터랩":
         df = get_naver_datalab_trends()
-        if keyword_input:
-            if not df.empty:
-                df = df[df['검색어'].astype(str).str.contains(keyword_input)]
+        if keyword_input and not df.empty:
+            df = df[df['검색어'].astype(str).str.contains(keyword_input)]
     
-    # Instagram은 로그인 시 직접 데이터를 수집하도록 별도 기능 필요
     if platform != "Instagram" and not df.empty:
         st.dataframe(df)
     elif platform != "Instagram" and df.empty:
         st.info("데이터가 없습니다.")
+
